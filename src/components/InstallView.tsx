@@ -27,7 +27,8 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
   const [profile, setProfile] = useState('TLS_1_3_CAMOUFLAGE');
   const [enableBbr, setEnableBbr] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'command' | 'script'>('command');
+  const [activeTab, setActiveTab] = useState<'command' | 'github' | 'script'>('command');
+  const [copiedGithub, setCopiedGithub] = useState(false);
 
   const origin = window.location.origin;
   const installUrl = `${origin}/install.sh?port=${port}&obfs=${profile}&password=${encodeURIComponent(
@@ -35,10 +36,18 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
   )}&bbr=${enableBbr}`;
   const oneLinerCommand = `bash <(curl -fsSL "${installUrl}")`;
 
+  const githubCommands = `git clone https://github.com/your-username/spectrewire.git\ncd spectrewire\nsudo chmod +x install.sh\nsudo ./install.sh`;
+
   const handleCopy = () => {
     navigator.clipboard.writeText(oneLinerCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleCopyGithub = () => {
+    navigator.clipboard.writeText(githubCommands);
+    setCopiedGithub(true);
+    setTimeout(() => setCopiedGithub(false), 2500);
   };
 
   const handleDownloadScript = () => {
@@ -57,12 +66,12 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
             <span>ZERO CONFIGURATION REQUIRED</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-white">
-            {isFa ? 'دستور نصب تک‌خطی سرور و پنل مدیریت تونل' : 'One-Line Server & Panel Installer'}
+            {isFa ? 'دستور نصب سرور از گیت‌هاب و دستور تک‌خطی' : 'One-Line & GitHub Server Installer'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
             {isFa
-              ? 'کافیست دستور زیر را در ترمینال سرور لینوکس (اوبونتو/دبیان) کپی و اجرا کنید. اسکریپت به صورت خودکار تمام پیش‌نیازها، بهینه‌ساز TCP BBR، سرویس پس‌زمینه خودکار و پنل وب را راه‌اندازی می‌کند.'
-              : 'Execute the single-line command below on any Linux VPS (Ubuntu/Debian). The script auto-configures dependencies, TCP BBR kernel acceleration, systemd service, and web panel.'}
+              ? 'می‌توانید سرور را به صورت مستقیم از طریق دستور تک‌خطی cURL یا با کلون کردن از مخزن گیت‌هاب روی سرور لینوکس راه‌اندازی کنید.'
+              : 'Deploy the server either via fast one-line cURL or by cloning directly from GitHub onto any Linux server.'}
           </p>
         </div>
       </div>
@@ -72,7 +81,13 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2 text-xs font-bold text-white">
             <Terminal className="w-4 h-4 text-cyan-400" />
-            <span>{isFa ? 'دستور تک‌خطی برای کپی در سرور (Bash One-Liner):' : 'One-Line Terminal Command:'}</span>
+            <span>
+              {activeTab === 'command'
+                ? isFa ? 'دستور تک‌خطی نصب سریع:' : '1-Line Command:'
+                : activeTab === 'github'
+                ? isFa ? 'دستورات نصب از طریق گیت‌هاب (Git Clone):' : 'GitHub Installation:'
+                : isFa ? 'سورس اسکریپت نصب:' : 'install.sh Script:'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -83,7 +98,17 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {isFa ? 'دستور تک‌خطی' : 'Command'}
+              {isFa ? 'نصب تک‌خطی (cURL)' : 'cURL One-Liner'}
+            </button>
+            <button
+              onClick={() => setActiveTab('github')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                activeTab === 'github'
+                  ? 'bg-slate-800 text-cyan-400'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {isFa ? 'نصب از گیت‌هاب (Git)' : 'GitHub Clone'}
             </button>
             <button
               onClick={() => setActiveTab('script')}
@@ -93,7 +118,7 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {isFa ? 'مشاهده اسکریپت کامل' : 'Full Script'}
+              {isFa ? 'مشاهده اسکریپت' : 'install.sh'}
             </button>
           </div>
         </div>
@@ -144,6 +169,52 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
                 <Download className="w-3 h-3" />
                 <span>{isFa ? 'دانلود مستقیم فایل install.sh' : 'Download install.sh'}</span>
               </button>
+            </div>
+          </div>
+        ) : activeTab === 'github' ? (
+          <div className="space-y-3">
+            <div className="relative group">
+              <pre
+                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-slate-800 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed"
+                dir="ltr"
+              >
+{`# 1. Clone repository from GitHub
+git clone https://github.com/your-username/spectrewire.git
+cd spectrewire
+
+# 2. Make installer executable and run
+sudo chmod +x install.sh
+sudo ./install.sh`}
+              </pre>
+
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <button
+                  onClick={handleCopyGithub}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
+                    copiedGithub
+                      ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
+                      : 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-500/20'
+                  }`}
+                >
+                  {copiedGithub ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{isFa ? 'کپی شد!' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{isFa ? 'کپی دستورات' : 'Copy'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs text-slate-400 leading-relaxed">
+              {isFa
+                ? 'فایل‌های کامل پروژه از مخزن گیت‌هاب دریافت شده و فایل install.sh به طور خودکار وابستگی‌های npm را نصب، پروژه را بیلد و سرویس دائمی Systemd را روی سرور فعال می‌کند.'
+                : 'Clones full project files from GitHub, builds production bundle, configures systemd, and starts background daemon.'}
             </div>
           </div>
         ) : (
