@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -911,10 +912,11 @@ function generateInstallScript(host: string, protocol: string, query: any) {
   const psk = query.psk || activeConfig.psk;
   const password = query.password || 'admin123';
   const bbr = query.bbr !== 'false' ? 'true' : 'false';
+  const baseUrl = `${protocol}://${host}`;
 
   return `#!/usr/bin/env bash
 # ==============================================================================
-#  SpectreWire (SWP/v2.4) Enterprise Tunnel Server & Panel - 1-Click VPS Installer
+#  SpectreWire (SWP/v2.4) Enterprise Tunnel & Web Panel - VPS Production Setup
 #  Architecture: Multi-hop Obfuscated Transport with Dynamic Jitter Padding
 # ==============================================================================
 set -e
@@ -934,12 +936,12 @@ cat << 'BANNER_EOF'
    ╚════██║██╔═══╝ ██╔══╝  ██║        ██║   ██╔══██╗██╔══╝  
    ███████║██║     ███████╗╚██████╗   ██║   ██║  ██║███████╗
    ╚══════╝╚═╝     ╚══════╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝
-        SPECTREWIRE PROTOCOL v2.4 - AUTOMATED VPS DEPLOYMENT
+        SPECTREWIRE PROTOCOL v2.4 - PRODUCTION LINUX DEPLOYMENT
 BANNER_EOF
 echo -e "\${NC}"
 
 if [ "\$(id -u)" != "0" ]; then
-   echo -e "\${RED}[!] این اسکریپت باید با دسترسی روت اجرا شود (sudo bash)\${NC}" 1>&2
+   echo -e "\${RED}[!] این اسکریپت باید با دسترسی روت اجرا شود (لطفاً از sudo bash استفاده کنید)\${NC}" 1>&2
    exit 1
 fi
 
@@ -949,29 +951,54 @@ SWP_PSK="${psk}"
 SWP_PASSWORD="${password}"
 ENABLE_BBR="${bbr}"
 INSTALL_DIR="/opt/spectrewire"
+SOURCE_URL="${baseUrl}"
 
-echo -e "\${YELLOW}[1/5] بروزرسانی مخازن لینوکس و نصب پکیج‌های ضروری (curl, wget, ufw, git)... \${NC}"
+echo -e "\${YELLOW}[1/6] بروزرسانی مخازن لینوکس و نصب پکیج‌های پایه (curl, wget, tar, ufw)... \${NC}"
 if [ -f /etc/debian_version ]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y >/dev/null 2>&1
-    apt-get install -y curl wget git ufw procps python3 >/dev/null 2>&1
+    apt-get install -y curl wget tar ufw procps python3 >/dev/null 2>&1
 elif [ -f /etc/redhat-release ]; then
-    yum install -y curl wget git procps python3 >/dev/null 2>&1
+    yum install -y curl wget tar procps python3 >/dev/null 2>&1
 fi
-echo -e "\${GREEN}[+] ابزارهای پایه با موفقیت نصب شدند.\${NC}"
+echo -e "\${GREEN}[+] ابزارهای پایه با موفقیت آماده شدند.\${NC}"
 
 if [ "\$ENABLE_BBR" = "true" ]; then
-    echo -e "\${YELLOW}[2/5] فعال‌سازی بهینه‌ساز TCP BBR برای غلبه بر Packet Loss فیلترینگ... \${NC}"
+    echo -e "\${YELLOW}[2/6] فعال‌سازی الگوریتم بهینه‌ساز TCP BBR برای غلبه بر فیلترینگ و پکت‌لاس... \${NC}"
     modprobe tcp_bbr 2>/dev/null || true
-    echo "net.core.default_qdisc=fq" > /etc/sysctl.d/99-spectrewire.conf
-    echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.d/99-spectrewire.conf
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.d/99-spectrewire.conf
+    cat << 'SYSCTL_EOF' > /etc/sysctl.d/99-spectrewire.conf
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.ip_forward = 1
+net.ipv4.tcp_fastopen = 3
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+fs.file-max = 1000000
+SYSCTL_EOF
     sysctl --system >/dev/null 2>&1 || true
-    echo -e "\${GREEN}[+] الگوریتم TCP BBR فعال شد.\${NC}"
+    echo -e "\${GREEN}[+] بهینه‌ساز TCP BBR با موفقیت روی سرور فعال شد.\${NC}"
 fi
 
-echo -e "\${YELLOW}[3/5] پیکربندی هسته سرور تونل و فایل‌های سیستم... \${NC}"
+echo -e "\${YELLOW}[3/6] بررسی و راه‌اندازی محیط اجرایی Node.js 20 LTS... \${NC}"
+if ! command -v node >/dev/null 2>&1 || [ "\$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
+    echo -e "\${CYAN}[*] در حال نصب خودکار Node.js... \${NC}"
+    if [ -f /etc/debian_version ]; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+        apt-get install -y nodejs >/dev/null 2>&1
+    elif [ -f /etc/redhat-release ]; then
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+        yum install -y nodejs >/dev/null 2>&1
+    fi
+fi
+NODE_PATH=\$(command -v node)
+echo -e "\${GREEN}[+] محیط Node.js (\$NODE_PATH - \$(\$NODE_PATH -v)) فعال است.\${NC}"
+
+echo -e "\${YELLOW}[4/6] دانلود و استقرار بسته اصلی سرور و پنل SpectreWire... \${NC}"
 mkdir -p "\$INSTALL_DIR"
+curl -fsSL "\$SOURCE_URL/api/tunnel/release.tar.gz" | tar -xz -C "\$INSTALL_DIR"
+
 cat << CONFIG_EOF > "\$INSTALL_DIR/config.json"
 {
   "port": \$SWP_PORT,
@@ -982,17 +1009,20 @@ cat << CONFIG_EOF > "\$INSTALL_DIR/config.json"
 }
 CONFIG_EOF
 
-echo -e "\${YELLOW}[4/5] ایجاد سرویس پس‌زمینه لینوکس (Systemd Auto-Restart)... \${NC}"
+echo -e "\${YELLOW}[5/6] ایجاد و فعال‌سازی سرویس دائمی لینوکس (Systemd Service)... \${NC}"
 cat << SYSTEMD_EOF > /etc/systemd/system/spectrewire.service
 [Unit]
-Description=SpectreWire Proprietary Tunnel Core & Web Panel
+Description=SpectreWire Proprietary Tunnel Engine & Web Management Panel
 After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=\$INSTALL_DIR
-ExecStart=/usr/bin/python3 -m http.server \$SWP_PORT
+Environment=NODE_ENV=production
+Environment=PORT=\$SWP_PORT
+ExecStart=\$NODE_PATH \$INSTALL_DIR/server.js
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -1008,21 +1038,93 @@ fi
 
 systemctl daemon-reload
 systemctl enable spectrewire.service >/dev/null 2>&1 || true
+systemctl restart spectrewire.service
+
+echo -e "\${YELLOW}[6/6] ایجاد دستور مدیریت سریع خط فرمان: spectrewire ... \${NC}"
+cat << 'CLI_EOF' > /usr/local/bin/spectrewire
+#!/usr/bin/env bash
+# SpectreWire Management CLI
+case "\$1" in
+  status)
+    systemctl status spectrewire.service
+    ;;
+  restart)
+    systemctl restart spectrewire.service
+    echo "[+] سرویس SpectreWire ریستارت شد."
+    ;;
+  stop)
+    systemctl stop spectrewire.service
+    echo "[!] سرویس SpectreWire متوقف شد."
+    ;;
+  start)
+    systemctl start spectrewire.service
+    echo "[+] سرویس SpectreWire راه‌اندازی شد."
+    ;;
+  logs|log)
+    journalctl -u spectrewire.service -f
+    ;;
+  password)
+    if [ -z "\$2" ]; then
+      echo "نحوه استفاده: spectrewire password <NEW_PASSWORD>"
+      exit 1
+    fi
+    python3 -c "import json; p='/opt/spectrewire/config.json'; d=json.load(open(p)); d['adminPassword']='\$2'; json.dump(d, open(p,'w'), indent=2)"
+    systemctl restart spectrewire.service
+    echo "[+] رمز عبور پنل با موفقیت به \$2 تغییر یافت."
+    ;;
+  *)
+    echo "=========================================================="
+    echo "       SpectreWire (SWP/v2.4) مدیریت سرور تونل"
+    echo "=========================================================="
+    echo "1) بررسی وضعیت سرویس (Status)"
+    echo "2) ریستارت سرویس تونل (Restart)"
+    echo "3) مشاهده لاگ‌های زنده ترافیک و پکت‌ها (Live Logs)"
+    echo "4) تغییر رمز عبور پنل وب (Change Password)"
+    echo "5) تغییر پورت سرور (Change Port)"
+    echo "6) خروج"
+    echo "=========================================================="
+    read -p "لطفاً یک شماره انتخاب کنید [1-6]: " choice
+    case "\$choice" in
+      1) systemctl status spectrewire.service ;;
+      2) systemctl restart spectrewire.service && echo "[+] سرویس ریستارت شد." ;;
+      3) journalctl -u spectrewire.service -f ;;
+      4)
+        read -p "رمز عبور جدید پنل را وارد کنید: " np
+        python3 -c "import json; p='/opt/spectrewire/config.json'; d=json.load(open(p)); d['adminPassword']='\$np'; json.dump(d, open(p,'w'), indent=2)"
+        systemctl restart spectrewire.service
+        echo "[+] رمز عبور جدید ذخیره شد."
+        ;;
+      5)
+        read -p "پورت جدید را وارد کنید: " nport
+        python3 -c "import json; p='/opt/spectrewire/config.json'; d=json.load(open(p)); d['port']=int('\$nport'); json.dump(d, open(p,'w'), indent=2)"
+        sed -i "s/Environment=PORT=.*/Environment=PORT=\$nport/" /etc/systemd/system/spectrewire.service
+        if command -v ufw >/dev/null 2>&1; then ufw allow \$nport/tcp >/dev/null 2>&1; fi
+        systemctl daemon-reload && systemctl restart spectrewire.service
+        echo "[+] پورت سرور به \$nport تغییر یافت."
+        ;;
+      6) exit 0 ;;
+      *) echo "گزینه نامعتبر" ;;
+    esac
+    ;;
+esac
+CLI_EOF
+chmod +x /usr/local/bin/spectrewire
 
 SERVER_IP=\$(curl -s -4 ifconfig.me || hostname -I | awk '{print \$1}')
 
 echo ""
-echo -e "\${GREEN}\${BOLD}==================================================================\${NC}"
-echo -e "\${GREEN}\${BOLD}   نصب سرور و پنل مدیریت تونل SPECTREWIRE با موفقیت انجام شد!     \${NC}"
-echo -e "\${GREEN}\${BOLD}==================================================================\${NC}"
-echo -e "\${CYAN}آدرس ورود به پنل تحت وب: \${BOLD}http://\${SERVER_IP}:\${SWP_PORT}\${NC}"
-echo -e "\${CYAN}نام کاربری ورود:         \${BOLD}admin\${NC}"
-echo -e "\${CYAN}رمز عبور اولیه:          \${BOLD}\${SWP_PASSWORD}\${NC}"
-echo -e "\${CYAN}پروتکل اختصاصی فعال:     \${BOLD}SWP/v2.4 (\${SWP_OBFS})\${NC}"
-echo -e "\${CYAN}پورت تونل و پنل:         \${BOLD}\${SWP_PORT}\${NC}"
+echo -e "\${GREEN}\${BOLD}======================================================================\${NC}"
+echo -e "\${GREEN}\${BOLD}   نصب سرور و پنل مدیریت تونل SPECTREWIRE با موفقیت به پایان رسید!    \${NC}"
+echo -e "\${GREEN}\${BOLD}======================================================================\${NC}"
+echo -e "\${CYAN}آدرس پنل مدیریت تحت وب: \${BOLD}http://\${SERVER_IP}:\${SWP_PORT}\${NC}"
+echo -e "\${CYAN}نام کاربری پنل:          \${BOLD}admin\${NC}"
+echo -e "\${CYAN}رمز عبور اولیه:           \${BOLD}\${SWP_PASSWORD}\${NC}"
+echo -e "\${CYAN}پروتکل اختصاصی فعال:      \${BOLD}SWP/v2.4 (\${SWP_OBFS})\${NC}"
+echo -e "\${CYAN}پورت تونل و وب:          \${BOLD}\${SWP_PORT}\${NC}"
 echo ""
-echo -e "\${YELLOW}>> توجه: پس از ورود به پنل، می‌توانید در بخش 'امنیت و رمز ورود' رمز دلخواه جدیدی تعریف کنید.\${NC}"
-echo -e "\${GREEN}==================================================================\${NC}"
+echo -e "\${YELLOW}>> برای مدیریت سرور در هر زمان، کافیست در خط فرمان سرور تایپ کنید: spectrewire\${NC}"
+echo -e "\${YELLOW}>> از داخل پنل وب نیز در بخش 'رمز پنل' می‌توانید رمز عبور را به دلخواه تغییر دهید.\${NC}"
+echo -e "\${GREEN}======================================================================\${NC}"
 `;
 }
 
@@ -1031,6 +1133,22 @@ app.get(['/install.sh', '/api/tunnel/install.sh'], (req: Request, res: Response)
   const protocol = req.protocol === 'https' ? 'https' : 'http';
   const script = generateInstallScript(host, protocol, req.query);
   res.type('text/x-shellscript').send(script);
+});
+
+app.get(['/release.tar.gz', '/api/tunnel/release.tar.gz'], (req: Request, res: Response) => {
+  const possiblePaths = [
+    path.resolve(__dirname, 'dist.tar.gz'),
+    path.resolve(__dirname, '..', 'dist.tar.gz'),
+    '/app/applet/dist.tar.gz'
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      res.setHeader('Content-Type', 'application/gzip');
+      res.setHeader('Content-Disposition', 'attachment; filename="spectrewire-release.tar.gz"');
+      return res.sendFile(p);
+    }
+  }
+  res.status(404).send('Release archive not found');
 });
 
 app.get('/api/tunnel/install-command', (req: Request, res: Response) => {
@@ -1095,7 +1213,31 @@ wss.on('connection', (ws: WebSocket, req) => {
 // Vite Middleware / Static Serving Setup
 // ---------------------------------------------------------
 const isProduction = process.env.NODE_ENV === 'production';
-const PORT = 3000;
+const PORT = isProduction ? (process.env.PORT ? Number(process.env.PORT) : 8443) : 3000;
+
+// Load config.json if running in standalone production Linux deployment
+try {
+  const cfgFiles = [
+    path.resolve(__dirname, 'config.json'),
+    path.resolve(process.cwd(), 'config.json'),
+    '/opt/spectrewire/config.json'
+  ];
+  for (const cf of cfgFiles) {
+    if (fs.existsSync(cf)) {
+      const data = JSON.parse(fs.readFileSync(cf, 'utf-8'));
+      if (data.port) activeConfig.port = Number(data.port);
+      if (data.obfuscationMode) activeConfig.obfuscationMode = data.obfuscationMode;
+      if (data.psk) activeConfig.psk = data.psk;
+      if (data.adminPassword) {
+        adminState.passwordHash = hashPassword(data.adminPassword);
+        adminState.passwordProtected = true;
+      }
+      break;
+    }
+  }
+} catch {
+  // ignore
+}
 
 async function startServer() {
   if (!isProduction) {
@@ -1107,9 +1249,13 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    const publicPath = fs.existsSync(distPath) ? distPath : __dirname;
+    app.use(express.static(publicPath));
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+      const indexFile = fs.existsSync(path.resolve(publicPath, 'index.html'))
+        ? path.resolve(publicPath, 'index.html')
+        : path.resolve(__dirname, 'index.html');
+      res.sendFile(indexFile);
     });
   }
 

@@ -154,31 +154,45 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
                 dir="ltr"
               >
 {`#!/usr/bin/env bash
-# SpectreWire SWP/v2.4 - 1-Click Server & Panel Installer
+# SpectreWire SWP/v2.4 - Full Production Linux Installer
 # Port: ${port} | Obfuscation: ${profile} | BBR: ${enableBbr}
 
 set -e
-echo "[+] Updating apt repositories..."
-apt-get update -y && apt-get install -y curl wget git ufw python3
+echo "[1/6] Installing dependencies (curl, tar, ufw, nodejs)..."
+apt-get update -y && apt-get install -y curl wget tar ufw procps python3
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
 
-# Enable TCP BBR Congestion Control
-echo "net.core.default_qdisc=fq" > /etc/sysctl.d/99-spectrewire.conf
-echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.d/99-spectrewire.conf
+# Enable TCP BBR Kernel Acceleration
+modprobe tcp_bbr || true
+cat << 'SYSCTL_EOF' > /etc/sysctl.d/99-spectrewire.conf
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.ip_forward = 1
+net.ipv4.tcp_fastopen = 3
+SYSCTL_EOF
 sysctl --system
 
-# Create Systemd Service
+# Download Complete Release Bundle
 mkdir -p /opt/spectrewire
+curl -fsSL "${origin}/api/tunnel/release.tar.gz" | tar -xz -C /opt/spectrewire
+
+# Create Systemd Production Service
 cat << 'EOF' > /etc/systemd/system/spectrewire.service
 [Unit]
-Description=SpectreWire Tunnel Core & Panel
+Description=SpectreWire Proprietary Tunnel & Panel
 After=network.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/spectrewire
-ExecStart=/usr/bin/python3 -m http.server ${port}
+Environment=NODE_ENV=production
+Environment=PORT=${port}
+ExecStart=/usr/bin/node /opt/spectrewire/server.js
 Restart=always
+RestartSec=3
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
@@ -186,7 +200,7 @@ EOF
 
 ufw allow ${port}/tcp
 systemctl daemon-reload && systemctl enable --now spectrewire.service
-echo "[+] SpectreWire installed successfully on port ${port}!"
+echo "[+] SpectreWire Enterprise successfully deployed on port ${port}!"
 `}
               </pre>
             </div>
@@ -296,6 +310,50 @@ echo "[+] SpectreWire installed successfully on port ${port}!"
                 ? 'از داخل پنل در بخش امنیت، رمز اختصاصی خود را تعیین کنید.'
                 : 'Set custom master password from the Security menu.'}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* CLI Tool Card */}
+      <div className="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-cyan-400" />
+              <span>{isFa ? 'ابزار مدیریت سرور در محیط ترمینال (Linux CLI Tool)' : 'Server CLI Management Tool'}</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {isFa
+                ? 'پس از اجرای دستور نصب، می‌توانید مستقیماً در ترمینال سرور دستورات زیر را اجرا کنید:'
+                : 'After installation, you can run these commands directly in your server terminal:'}
+            </p>
+          </div>
+          <code className="text-xs font-mono text-cyan-300 bg-slate-950 px-2.5 py-1 rounded border border-slate-800" dir="ltr">
+            spectrewire
+          </code>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono" dir="ltr">
+          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+            <span className="text-cyan-400 font-semibold block">spectrewire</span>
+            <span className="text-slate-400 text-[11px] font-sans">
+              {isFa ? 'منوی تعاملی مدیریت کامل' : 'Interactive text menu'}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+            <span className="text-emerald-400 font-semibold block">spectrewire status</span>
+            <span className="text-slate-400 text-[11px] font-sans">
+              {isFa ? 'بررسی وضعیت سلامت سرویس' : 'Check service status'}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-purple-400 font-semibold block">spectrewire logs</div>
+          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+            <span className="text-amber-400 font-semibold block">spectrewire restart</span>
+            <span className="text-slate-400 text-[11px] font-sans">
+              {isFa ? 'ریستارت فوری هسته تونل' : 'Restart tunnel core'}
+            </span>
           </div>
         </div>
       </div>
