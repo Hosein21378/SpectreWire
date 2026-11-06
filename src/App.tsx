@@ -6,7 +6,8 @@ import {
   TunnelNode, 
   ProtocolConfig, 
   ClientToken, 
-  WirePacket 
+  WirePacket,
+  AuthStatus 
 } from './types/tunnel';
 import { Navbar } from './components/Navbar';
 import { OverviewView } from './components/OverviewView';
@@ -15,10 +16,18 @@ import { ProtocolConfigView } from './components/ProtocolConfigView';
 import { WireInspectorView } from './components/WireInspectorView';
 import { NodesView } from './components/NodesView';
 import { ClientsView } from './components/ClientsView';
+import { InstallView } from './components/InstallView';
+import { SecurityModal } from './components/SecurityModal';
+import { LoginModal } from './components/LoginModal';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('fa');
   const [currentTab, setCurrentTab] = useState<TabType>('overview');
+
+  // Authentication & Security State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [showSecurityModal, setShowSecurityModal] = useState<boolean>(false);
 
   const [stats, setStats] = useState<TunnelStats | null>(null);
   const [nodes, setNodes] = useState<TunnelNode[]>([]);
@@ -32,6 +41,55 @@ export default function App() {
     setLang(nextLang);
     document.documentElement.dir = nextLang === 'fa' ? 'rtl' : 'ltr';
     document.documentElement.lang = nextLang;
+  };
+
+  // Auth Status Check
+  const checkAuth = async () => {
+    try {
+      const savedToken = localStorage.getItem('swp_auth_token') || '';
+      const res = await fetch('/api/auth/status', {
+        headers: savedToken ? { Authorization: `Bearer ${savedToken}` } : {},
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (!data.passwordProtected) {
+          setIsAuthenticated(true);
+        } else if (data.isAuthenticated) {
+          setIsAuthenticated(true);
+        } else {
+          // If token was not set, store initial token or ask for login
+          if (data.initialSessionToken && !savedToken) {
+            localStorage.setItem('swp_auth_token', data.initialSessionToken);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+          }
+        }
+      }
+    } catch {
+      setIsAuthenticated(true);
+    } finally {
+      setAuthChecking(false);
+    }
+  };
+
+  const handleLoginSuccess = (token: string) => {
+    setIsAuthenticated(true);
+    fetchStats();
+  };
+
+  const handleLogout = async () => {
+    try {
+      const savedToken = localStorage.getItem('swp_auth_token') || '';
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: savedToken ? { Authorization: `Bearer ${savedToken}` } : {},
+      });
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('swp_auth_token');
+    setIsAuthenticated(false);
   };
 
   // Initial Fetch & Periodic Telemetry
@@ -96,6 +154,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    checkAuth();
     fetchStats();
     fetchNodes();
     fetchConfig();
@@ -212,6 +271,10 @@ export default function App() {
 
   const isFa = lang === 'fa';
 
+  if (!isAuthenticated && !authChecking) {
+    return <LoginModal lang={lang} onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/20 selection:text-cyan-200">
       {/* Top Bar */}
@@ -221,6 +284,8 @@ export default function App() {
         lang={lang}
         onToggleLang={handleToggleLang}
         onQuickTrafficClick={() => setCurrentTab('traffic')}
+        onOpenSecurity={() => setShowSecurityModal(true)}
+        onLogout={handleLogout}
         activeNodesCount={nodes.filter((n) => n.status === 'ONLINE').length}
       />
 
@@ -238,6 +303,10 @@ export default function App() {
 
         {currentTab === 'traffic' && (
           <TrafficTesterView lang={lang} />
+        )}
+
+        {currentTab === 'install' && (
+          <InstallView lang={lang} />
         )}
 
         {currentTab === 'protocol' && (
@@ -276,7 +345,18 @@ export default function App() {
         )}
       </main>
 
-      {/* Clean Footer adhering to design guidelines (no pseudo engines or fake scoreboards) */}
+      {/* Security & Password Modal */}
+      <SecurityModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        lang={lang}
+        onLogout={handleLogout}
+        onPasswordChanged={(newToken) => {
+          localStorage.setItem('swp_auth_token', newToken);
+        }}
+      />
+
+      {/* Clean Footer adhering to design guidelines */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">

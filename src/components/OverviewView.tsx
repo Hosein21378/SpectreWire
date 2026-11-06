@@ -11,7 +11,8 @@ import {
   Zap, 
   ExternalLink,
   ChevronRight,
-  HardDrive
+  HardDrive,
+  Terminal
 } from 'lucide-react';
 
 interface OverviewViewProps {
@@ -64,17 +65,24 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
-              onClick={() => onNavigate('traffic')}
+              onClick={() => onNavigate('install')}
               className="px-4 py-2 text-sm font-semibold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 rounded-lg shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2 cursor-pointer"
             >
-              <Zap className="w-4 h-4 fill-current" />
-              <span>{isFa ? 'ارسال و تست ترافیک زنده' : 'Route Real Traffic'}</span>
+              <Terminal className="w-4 h-4" />
+              <span>{isFa ? 'دستور نصب سرور' : '1-Click VPS Install'}</span>
+            </button>
+            <button
+              onClick={() => onNavigate('traffic')}
+              className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-cyan-400" />
+              <span>{isFa ? 'تست عبور داده' : 'Test Traffic'}</span>
             </button>
             <button
               onClick={() => onNavigate('protocol')}
               className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
             >
-              <span>{isFa ? 'تنظیمات پروتکل SWP' : 'Protocol Config'}</span>
+              <span>{isFa ? 'تنظیمات SWP' : 'Protocol'}</span>
             </button>
           </div>
         </div>

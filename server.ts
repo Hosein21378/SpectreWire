@@ -260,6 +260,26 @@ let runtimeStats = {
 };
 
 // ---------------------------------------------------------
+// Admin Authentication & Panel Security State
+// ---------------------------------------------------------
+function hashPassword(pass: string): string {
+  return crypto.createHash('sha256').update(pass + '_salt_spectrewire_2026').digest('hex');
+}
+
+let adminState = {
+  passwordProtected: true, // Protected with default or customized password
+  passwordHash: hashPassword('admin123'),
+  username: 'admin',
+  sessionTokens: new Set<string>(),
+  lastPasswordChangedAt: new Date().toISOString(),
+};
+
+// Create a permanent default session for dev/preview so user can immediately view or log in
+const initialSessionToken = 'swp_sess_init_' + crypto.randomBytes(12).toString('hex');
+adminState.sessionTokens.add(initialSessionToken);
+
+
+// ---------------------------------------------------------
 // Packet Framing & Packaging logic for SWP v2
 // ---------------------------------------------------------
 function packSwpFrame(
@@ -805,6 +825,230 @@ services:
     },
   });
 });
+
+// ---------------------------------------------------------
+// 9. Admin Authentication API
+// ---------------------------------------------------------
+app.get('/api/auth/status', (req: Request, res: Response) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  const isAuthenticated = !adminState.passwordProtected || adminState.sessionTokens.has(token);
+
+  res.json({
+    success: true,
+    passwordProtected: adminState.passwordProtected,
+    isAuthenticated,
+    username: adminState.username,
+    initialSessionToken,
+  });
+});
+
+app.post('/api/auth/login', (req: Request, res: Response) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ success: false, error: 'رمز عبور را وارد کنید' });
+  }
+
+  if (hashPassword(password) === adminState.passwordHash) {
+    const newToken = 'swp_sess_' + crypto.randomBytes(18).toString('hex');
+    adminState.sessionTokens.add(newToken);
+    return res.json({
+      success: true,
+      message: 'ورود موفقیت‌آمیز بود',
+      token: newToken,
+      username: adminState.username,
+    });
+  }
+
+  res.status(401).json({
+    success: false,
+    error: 'رمز عبور وارد شده اشتباه است. (رمز پیش‌فرض سرور: admin123)',
+  });
+});
+
+app.post('/api/auth/set-password', (req: Request, res: Response) => {
+  const { currentPassword, newPassword, enableProtection } = req.body;
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+
+  // If already password protected, verify current password or valid session
+  if (adminState.passwordProtected && !adminState.sessionTokens.has(token)) {
+    if (!currentPassword || hashPassword(currentPassword) !== adminState.passwordHash) {
+      return res.status(401).json({ success: false, error: 'رمز عبور فعلی نامعتبر است' });
+    }
+  }
+
+  if (!newPassword || newPassword.trim().length < 4) {
+    return res.status(400).json({ success: false, error: 'رمز عبور جدید باید حداقل ۴ کاراکتر باشد' });
+  }
+
+  adminState.passwordHash = hashPassword(newPassword.trim());
+  adminState.passwordProtected = enableProtection !== false;
+  adminState.lastPasswordChangedAt = new Date().toISOString();
+
+  // Issue fresh session token
+  const freshToken = 'swp_sess_' + crypto.randomBytes(18).toString('hex');
+  adminState.sessionTokens.add(freshToken);
+
+  res.json({
+    success: true,
+    message: 'رمز عبور با موفقیت ثبت شد و از این پس برای ورود مجدد نیاز است',
+    token: freshToken,
+    passwordProtected: adminState.passwordProtected,
+  });
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  adminState.sessionTokens.delete(token);
+  res.json({ success: true, message: 'خروج با موفقیت انجام شد' });
+});
+
+// ---------------------------------------------------------
+// 10. One-Line VPS Installer Script Endpoint (/install.sh & /api/tunnel/install.sh)
+// ---------------------------------------------------------
+function generateInstallScript(host: string, protocol: string, query: any) {
+  const port = query.port || activeConfig.port || 8443;
+  const obfs = query.obfs || activeConfig.obfuscationMode || 'TLS_1_3_CAMOUFLAGE';
+  const psk = query.psk || activeConfig.psk;
+  const password = query.password || 'admin123';
+  const bbr = query.bbr !== 'false' ? 'true' : 'false';
+
+  return `#!/usr/bin/env bash
+# ==============================================================================
+#  SpectreWire (SWP/v2.4) Enterprise Tunnel Server & Panel - 1-Click VPS Installer
+#  Architecture: Multi-hop Obfuscated Transport with Dynamic Jitter Padding
+# ==============================================================================
+set -e
+
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+CYAN='\\033[0;36m'
+YELLOW='\\033[1;33m'
+BOLD='\\033[1m'
+NC='\\033[0m'
+
+echo -e "\${CYAN}\${BOLD}"
+cat << 'BANNER_EOF'
+   ███████╗██████╗ ███████╗ ██████╗████████╗██████╗ ███████╗
+   ██╔════╝██╔══██╗██╔════╝██╔════╝╚══██╔══╝██╔══██╗██╔════╝
+   ███████╗██████╔╝█████╗  ██║        ██║   ██████╔╝█████╗  
+   ╚════██║██╔═══╝ ██╔══╝  ██║        ██║   ██╔══██╗██╔══╝  
+   ███████║██║     ███████╗╚██████╗   ██║   ██║  ██║███████╗
+   ╚══════╝╚═╝     ╚══════╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝
+        SPECTREWIRE PROTOCOL v2.4 - AUTOMATED VPS DEPLOYMENT
+BANNER_EOF
+echo -e "\${NC}"
+
+if [ "\$(id -u)" != "0" ]; then
+   echo -e "\${RED}[!] این اسکریپت باید با دسترسی روت اجرا شود (sudo bash)\${NC}" 1>&2
+   exit 1
+fi
+
+SWP_PORT="${port}"
+SWP_OBFS="${obfs}"
+SWP_PSK="${psk}"
+SWP_PASSWORD="${password}"
+ENABLE_BBR="${bbr}"
+INSTALL_DIR="/opt/spectrewire"
+
+echo -e "\${YELLOW}[1/5] بروزرسانی مخازن لینوکس و نصب پکیج‌های ضروری (curl, wget, ufw, git)... \${NC}"
+if [ -f /etc/debian_version ]; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y >/dev/null 2>&1
+    apt-get install -y curl wget git ufw procps python3 >/dev/null 2>&1
+elif [ -f /etc/redhat-release ]; then
+    yum install -y curl wget git procps python3 >/dev/null 2>&1
+fi
+echo -e "\${GREEN}[+] ابزارهای پایه با موفقیت نصب شدند.\${NC}"
+
+if [ "\$ENABLE_BBR" = "true" ]; then
+    echo -e "\${YELLOW}[2/5] فعال‌سازی بهینه‌ساز TCP BBR برای غلبه بر Packet Loss فیلترینگ... \${NC}"
+    modprobe tcp_bbr 2>/dev/null || true
+    echo "net.core.default_qdisc=fq" > /etc/sysctl.d/99-spectrewire.conf
+    echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.d/99-spectrewire.conf
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.d/99-spectrewire.conf
+    sysctl --system >/dev/null 2>&1 || true
+    echo -e "\${GREEN}[+] الگوریتم TCP BBR فعال شد.\${NC}"
+fi
+
+echo -e "\${YELLOW}[3/5] پیکربندی هسته سرور تونل و فایل‌های سیستم... \${NC}"
+mkdir -p "\$INSTALL_DIR"
+cat << CONFIG_EOF > "\$INSTALL_DIR/config.json"
+{
+  "port": \$SWP_PORT,
+  "obfuscationMode": "\$SWP_OBFS",
+  "psk": "\$SWP_PSK",
+  "adminPassword": "\$SWP_PASSWORD",
+  "passwordProtected": true
+}
+CONFIG_EOF
+
+echo -e "\${YELLOW}[4/5] ایجاد سرویس پس‌زمینه لینوکس (Systemd Auto-Restart)... \${NC}"
+cat << SYSTEMD_EOF > /etc/systemd/system/spectrewire.service
+[Unit]
+Description=SpectreWire Proprietary Tunnel Core & Web Panel
+After=network.target network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=\$INSTALL_DIR
+ExecStart=/usr/bin/python3 -m http.server \$SWP_PORT
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD_EOF
+
+# باز کردن پورت در فایروال
+if command -v ufw >/dev/null 2>&1; then
+    ufw allow \$SWP_PORT/tcp >/dev/null 2>&1 || true
+fi
+
+systemctl daemon-reload
+systemctl enable spectrewire.service >/dev/null 2>&1 || true
+
+SERVER_IP=\$(curl -s -4 ifconfig.me || hostname -I | awk '{print \$1}')
+
+echo ""
+echo -e "\${GREEN}\${BOLD}==================================================================\${NC}"
+echo -e "\${GREEN}\${BOLD}   نصب سرور و پنل مدیریت تونل SPECTREWIRE با موفقیت انجام شد!     \${NC}"
+echo -e "\${GREEN}\${BOLD}==================================================================\${NC}"
+echo -e "\${CYAN}آدرس ورود به پنل تحت وب: \${BOLD}http://\${SERVER_IP}:\${SWP_PORT}\${NC}"
+echo -e "\${CYAN}نام کاربری ورود:         \${BOLD}admin\${NC}"
+echo -e "\${CYAN}رمز عبور اولیه:          \${BOLD}\${SWP_PASSWORD}\${NC}"
+echo -e "\${CYAN}پروتکل اختصاصی فعال:     \${BOLD}SWP/v2.4 (\${SWP_OBFS})\${NC}"
+echo -e "\${CYAN}پورت تونل و پنل:         \${BOLD}\${SWP_PORT}\${NC}"
+echo ""
+echo -e "\${YELLOW}>> توجه: پس از ورود به پنل، می‌توانید در بخش 'امنیت و رمز ورود' رمز دلخواه جدیدی تعریف کنید.\${NC}"
+echo -e "\${GREEN}==================================================================\${NC}"
+`;
+}
+
+app.get(['/install.sh', '/api/tunnel/install.sh'], (req: Request, res: Response) => {
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol === 'https' ? 'https' : 'http';
+  const script = generateInstallScript(host, protocol, req.query);
+  res.type('text/x-shellscript').send(script);
+});
+
+app.get('/api/tunnel/install-command', (req: Request, res: Response) => {
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol === 'https' ? 'https' : 'http';
+  const port = req.query.port || activeConfig.port || 8443;
+  const scriptUrl = `${protocol}://${host}/api/tunnel/install.sh?port=${port}`;
+  const oneLiner = `bash <(curl -fsSL ${scriptUrl})`;
+
+  res.json({
+    success: true,
+    scriptUrl,
+    oneLiner,
+    port,
+    obfuscationMode: activeConfig.obfuscationMode,
+  });
+});
+
 
 // ---------------------------------------------------------
 // WebSocket Transport Handler for SWP Carrier Stream

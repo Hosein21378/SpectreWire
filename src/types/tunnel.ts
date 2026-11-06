@@ -1,6 +1,12 @@
-export type TabType = 'overview' | 'traffic' | 'protocol' | 'inspector' | 'nodes' | 'clients';
+export type TabType = 'overview' | 'traffic' | 'protocol' | 'inspector' | 'nodes' | 'clients' | 'install';
 
 export type Language = 'fa' | 'en';
+
+export interface AuthStatus {
+  passwordProtected: boolean;
+  isAuthenticated: boolean;
+  username: string;
+}
 
 export interface ProtocolConfig {
   protocolName: string;
