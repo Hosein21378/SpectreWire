@@ -28,35 +28,23 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
   const [profile, setProfile] = useState('TLS_1_3_CAMOUFLAGE');
   const [enableBbr, setEnableBbr] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'github' | 'command' | 'script'>('github');
+  const [activeTab, setActiveTab] = useState<'oneliner' | 'github' | 'script'>('oneliner');
   const [copiedGithub, setCopiedGithub] = useState(false);
 
-  const origin = window.location.origin;
-  const installUrl = `${origin}/install.sh?port=${port}&obfs=${profile}&password=${encodeURIComponent(
-    password
-  )}&bbr=${enableBbr}`;
-  const oneLinerCommand = `bash <(curl -fsSL "${installUrl}")`;
+  const autoOneLiner = `sudo bash -c "export DEBIAN_FRONTEND=noninteractive; apt-get update -y && apt-get install -y git curl && rm -rf /opt/spectrewire && git clone ${repoUrl} /opt/spectrewire && cd /opt/spectrewire && chmod +x install.sh && PORT=${port} PASSWORD='${password}' ./install.sh"`;
 
-  const githubCommands = `sudo apt-get update && sudo apt-get install -y git
-git clone ${repoUrl} spectrewire
-cd spectrewire
-sudo chmod +x install.sh
-sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
+  const rawGithubOneLiner = `sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/nhoseinm2/spectrewire/main/install.sh)"`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(oneLinerCommand);
+  const handleCopyOneLiner = () => {
+    navigator.clipboard.writeText(autoOneLiner);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleCopyGithub = () => {
-    navigator.clipboard.writeText(githubCommands);
+  const handleCopyRaw = () => {
+    navigator.clipboard.writeText(rawGithubOneLiner);
     setCopiedGithub(true);
     setTimeout(() => setCopiedGithub(false), 2500);
-  };
-
-  const handleDownloadScript = () => {
-    window.open(installUrl, '_blank');
   };
 
   return (
@@ -108,14 +96,24 @@ sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
           <div className="flex items-center gap-2 text-xs font-bold text-white">
             <Terminal className="w-4 h-4 text-cyan-400" />
             <span>
-              {activeTab === 'command'
-                ? isFa ? 'دستور تک‌خطی نصب سریع:' : '1-Line Command:'
+              {activeTab === 'oneliner'
+                ? isFa ? 'دستور تک‌خطی نصب ۱۰۰٪ خودکار (یک کلیک روی VPS):' : 'Autonomous 1-Line Command:'
                 : activeTab === 'github'
-                ? isFa ? 'دستورات نصب مستقیم از گیت‌هاب (بدون ارور ۴۰۳):' : 'GitHub Installation (Guaranteed No 403):'
+                ? isFa ? 'دستور تک‌خطی از گیت‌هاب خام (GitHub Raw):' : 'GitHub Raw 1-Liner:'
                 : isFa ? 'سورس اسکریپت نصب:' : 'install.sh Script:'}
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('oneliner')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                activeTab === 'oneliner'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {isFa ? 'دستور تک‌خطی خودکار (پیشنهادی)' : 'Autonomous 1-Liner (Recommended)'}
+            </button>
             <button
               onClick={() => setActiveTab('github')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
@@ -124,17 +122,7 @@ sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {isFa ? 'نصب از گیت‌هاب (پیشنهادی)' : 'GitHub Clone (Recommended)'}
-            </button>
-            <button
-              onClick={() => setActiveTab('command')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                activeTab === 'command'
-                  ? 'bg-slate-800 text-cyan-400'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {isFa ? 'نصب تک‌خطی (cURL)' : 'cURL One-Liner'}
+              {isFa ? 'تک‌خطی گیت‌هاب' : 'GitHub Raw 1-Liner'}
             </button>
             <button
               onClick={() => setActiveTab('script')}
@@ -149,32 +137,60 @@ sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
           </div>
         </div>
 
-        {activeTab === 'github' ? (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 items-center">
-              <label className="text-xs text-slate-300 whitespace-nowrap">
-                {isFa ? 'آدرس مخزن گیت‌هاب شما:' : 'GitHub Repository URL:'}
-              </label>
-              <input
-                type="text"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-cyan-300 font-mono"
-                dir="ltr"
-              />
-            </div>
-
+        {activeTab === 'oneliner' ? (
+          <div className="space-y-3">
             <div className="relative group">
               <pre
-                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-cyan-900/40 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed"
+                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-cyan-500/40 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed selection:bg-cyan-500/30"
                 dir="ltr"
               >
-{githubCommands}
+{autoOneLiner}
               </pre>
 
               <div className="absolute right-3 top-3 flex items-center gap-2">
                 <button
-                  onClick={handleCopyGithub}
+                  onClick={handleCopyOneLiner}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg transition-all cursor-pointer ${
+                    copied
+                      ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
+                      : 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-500/20'
+                  }`}
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{isFa ? 'کپی شد!' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>{isFa ? 'کپی دستور تک‌خطی' : 'Copy 1-Liner'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>{isFa ? 'تمام مراحل (نصب گیت، نود، پکیج‌ها، بیلد، شتاب BBR و سرویس لینوکس) کاملاً اتوماتیک انجام می‌شود.' : 'Fully automated VPS installation, BBR acceleration & Systemd daemon.'}</span>
+              </span>
+            </div>
+          </div>
+        ) : activeTab === 'github' ? (
+          <div className="space-y-3">
+            <div className="relative group">
+              <pre
+                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-slate-800 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed"
+                dir="ltr"
+              >
+{rawGithubOneLiner}
+              </pre>
+
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <button
+                  onClick={handleCopyRaw}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
                     copiedGithub
                       ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
@@ -189,7 +205,7 @@ sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" />
-                      <span>{isFa ? 'کپی دستورات گیت' : 'Copy Git Commands'}</span>
+                      <span>{isFa ? 'کپی دستور گیت‌هاب' : 'Copy Raw Command'}</span>
                     </>
                   )}
                 </button>
@@ -198,56 +214,8 @@ sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
 
             <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs text-slate-400 leading-relaxed">
               {isFa
-                ? 'این روش هیچ وابستگی به سرویس خارجی ندارد. ابتدا فایل‌های پروژه با Git کلون می‌شوند و سپس اسکریپت نصب به صورت محلی تمام پکیج‌ها، سرویس Systemd و شتاب‌دهنده BBR را روی سرور فعال می‌کند.'
-                : 'Clones full project files from GitHub, builds production bundle, configures systemd, and starts background daemon.'}
-            </div>
-          </div>
-        ) : activeTab === 'command' ? (
-          <div className="space-y-3">
-            <div className="relative group">
-              <pre
-                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-cyan-900/50 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto selection:bg-cyan-500/30 font-semibold"
-                dir="ltr"
-              >
-                {oneLinerCommand}
-              </pre>
-
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                <button
-                  onClick={handleCopy}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
-                    copied
-                      ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
-                      : 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-500/20'
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{isFa ? 'کپی شد!' : 'Copied!'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>{isFa ? 'کپی دستور' : 'Copy'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{isFa ? 'سازگار با Ubuntu 20.04/22.04/24.04 و Debian 11/12' : 'Compatible with Ubuntu 20.04/22.04/24.04 and Debian 11/12'}</span>
-              </span>
-              <button
-                onClick={handleDownloadScript}
-                className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-              >
-                <Download className="w-3 h-3" />
-                <span>{isFa ? 'دانلود مستقیم فایل install.sh' : 'Download install.sh'}</span>
-              </button>
+                ? 'اجرای مستقیم اسکریپت install.sh از روی سرورهای ابری گیت‌هاب خام بدون ارور ۴۰۳.'
+                : 'Direct execution of raw install.sh from GitHub.'}
             </div>
           </div>
         ) : (

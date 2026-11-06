@@ -90,20 +90,28 @@ if [ -f "$SCRIPT_DIR/package.json" ]; then
     echo -e "${CYAN}[*] کامپایل و ساخت بیلد نهایی پروژه...${NC}"
     npm run build
 else
-    echo -e "${CYAN}[*] دانلود سورس پروژه از مخزن گیت‌هاب...${NC}"
-    DEFAULT_REPO="https://github.com/nhoseinm2/spectrewire.git"
-    read -t 15 -p "آدرس مخزن گیت‌هاب شما [$DEFAULT_REPO]: " INPUT_REPO || true
-    REPO_URL="${INPUT_REPO:-$DEFAULT_REPO}"
-    
-    rm -rf "$INSTALL_DIR"
-    if ! git clone "$REPO_URL" "$INSTALL_DIR"; then
-        echo -e "${RED}[!] خطا در دریافت مخزن گیت‌هاب. لطفاً ابتدا پروژه را کلون کنید:${NC}"
-        echo -e "${BOLD}git clone $REPO_URL && cd spectrewire && sudo ./install.sh${NC}"
-        exit 1
+    echo -e "${CYAN}[*] بررسی سورس پروژه و راه‌اندازی هسته تونل...${NC}"
+    DEFAULT_REPO="${REPO:-https://github.com/nhoseinm2/spectrewire.git}"
+    CLONE_SUCCESS=false
+
+    if command -v git >/dev/null 2>&1; then
+        echo -e "${CYAN}[*] بررسی مخزن گیت‌هاب ($DEFAULT_REPO)...${NC}"
+        if git clone --depth 1 "$DEFAULT_REPO" "$INSTALL_DIR" 2>/dev/null; then
+            CLONE_SUCCESS=true
+            cd "$INSTALL_DIR"
+            npm install --no-audit
+            npm run build
+        fi
     fi
-    cd "$INSTALL_DIR"
-    npm install --no-audit
-    npm run build
+
+    if [ "$CLONE_SUCCESS" = "false" ]; then
+        echo -e "${YELLOW}[!] مخزن گیت‌هاب هنوز ایجاد نشده یا عمومی نیست. در حال راه‌اندازی نسخه مستقل و خودکار SpectreWire...${NC}"
+        mkdir -p "$INSTALL_DIR"
+        if [ -f "$SCRIPT_DIR/standalone_setup.sh" ]; then
+            bash "$SCRIPT_DIR/standalone_setup.sh"
+            exit 0
+        fi
+    fi
 fi
 
 cat << CONFIG_EOF > "$INSTALL_DIR/config.json"
