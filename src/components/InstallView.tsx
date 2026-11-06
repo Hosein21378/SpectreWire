@@ -22,12 +22,13 @@ interface InstallViewProps {
 export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
   const isFa = lang === 'fa';
 
+  const [repoUrl, setRepoUrl] = useState('https://github.com/nhoseinm2/spectrewire.git');
   const [port, setPort] = useState(8443);
   const [password, setPassword] = useState('admin123');
   const [profile, setProfile] = useState('TLS_1_3_CAMOUFLAGE');
   const [enableBbr, setEnableBbr] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'command' | 'github' | 'script'>('command');
+  const [activeTab, setActiveTab] = useState<'github' | 'command' | 'script'>('github');
   const [copiedGithub, setCopiedGithub] = useState(false);
 
   const origin = window.location.origin;
@@ -36,7 +37,11 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
   )}&bbr=${enableBbr}`;
   const oneLinerCommand = `bash <(curl -fsSL "${installUrl}")`;
 
-  const githubCommands = `git clone https://github.com/your-username/spectrewire.git\ncd spectrewire\nsudo chmod +x install.sh\nsudo ./install.sh`;
+  const githubCommands = `sudo apt-get update && sudo apt-get install -y git
+git clone ${repoUrl} spectrewire
+cd spectrewire
+sudo chmod +x install.sh
+sudo PORT=${port} PASSWORD="${password}" ./install.sh`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(oneLinerCommand);
@@ -76,6 +81,27 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
         </div>
       </div>
 
+      {/* 403 Error Solution Callout Banner */}
+      <div className="rounded-2xl bg-amber-950/40 border border-amber-600/40 p-5 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="space-y-1 text-xs">
+            <h3 className="font-bold text-amber-200 text-sm">
+              {isFa
+                ? 'رفع خطای curl: (22) The requested URL returned error: 403 روی سرور مجازی'
+                : 'Fix for curl: (22) The requested URL returned error: 403'}
+            </h3>
+            <p className="text-amber-300/80 leading-relaxed">
+              {isFa
+                ? 'علت خطا: دامنه پیش‌نمایش محیط توسعه ابری Google Cloud دارای احراز هویت داخلی است و دانلود مستقیم cURL از سرورهای خارج از مرورگر را مسدود می‌کند. راه‌حل قطعی و استاندارد: استفاده از روش گیت‌هاب (Git Clone) در تب زیر است که مستقیماً پکیج‌ها را روی لینوکس شما کامپایل و راه‌اندازی می‌کند.'
+                : 'Reason: The development preview domain requires Google Cloud session auth. External servers running direct curl receive a 403 Forbidden. Solution: Use the "GitHub Clone" tab below which compiles directly on your VPS without remote API lock.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Main Command Box */}
       <div className="rounded-2xl bg-slate-900/70 border border-slate-800/90 p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
@@ -85,11 +111,21 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
               {activeTab === 'command'
                 ? isFa ? 'دستور تک‌خطی نصب سریع:' : '1-Line Command:'
                 : activeTab === 'github'
-                ? isFa ? 'دستورات نصب از طریق گیت‌هاب (Git Clone):' : 'GitHub Installation:'
+                ? isFa ? 'دستورات نصب مستقیم از گیت‌هاب (بدون ارور ۴۰۳):' : 'GitHub Installation (Guaranteed No 403):'
                 : isFa ? 'سورس اسکریپت نصب:' : 'install.sh Script:'}
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('github')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                activeTab === 'github'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {isFa ? 'نصب از گیت‌هاب (پیشنهادی)' : 'GitHub Clone (Recommended)'}
+            </button>
             <button
               onClick={() => setActiveTab('command')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
@@ -99,16 +135,6 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
               }`}
             >
               {isFa ? 'نصب تک‌خطی (cURL)' : 'cURL One-Liner'}
-            </button>
-            <button
-              onClick={() => setActiveTab('github')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                activeTab === 'github'
-                  ? 'bg-slate-800 text-cyan-400'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {isFa ? 'نصب از گیت‌هاب (Git)' : 'GitHub Clone'}
             </button>
             <button
               onClick={() => setActiveTab('script')}
@@ -123,7 +149,60 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
           </div>
         </div>
 
-        {activeTab === 'command' ? (
+        {activeTab === 'github' ? (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <label className="text-xs text-slate-300 whitespace-nowrap">
+                {isFa ? 'آدرس مخزن گیت‌هاب شما:' : 'GitHub Repository URL:'}
+              </label>
+              <input
+                type="text"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-cyan-300 font-mono"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="relative group">
+              <pre
+                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-cyan-900/40 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed"
+                dir="ltr"
+              >
+{githubCommands}
+              </pre>
+
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <button
+                  onClick={handleCopyGithub}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
+                    copiedGithub
+                      ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
+                      : 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-500/20'
+                  }`}
+                >
+                  {copiedGithub ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{isFa ? 'کپی شد!' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{isFa ? 'کپی دستورات گیت' : 'Copy Git Commands'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs text-slate-400 leading-relaxed">
+              {isFa
+                ? 'این روش هیچ وابستگی به سرویس خارجی ندارد. ابتدا فایل‌های پروژه با Git کلون می‌شوند و سپس اسکریپت نصب به صورت محلی تمام پکیج‌ها، سرویس Systemd و شتاب‌دهنده BBR را روی سرور فعال می‌کند.'
+                : 'Clones full project files from GitHub, builds production bundle, configures systemd, and starts background daemon.'}
+            </div>
+          </div>
+        ) : activeTab === 'command' ? (
           <div className="space-y-3">
             <div className="relative group">
               <pre
@@ -169,52 +248,6 @@ export const InstallView: React.FC<InstallViewProps> = ({ lang }) => {
                 <Download className="w-3 h-3" />
                 <span>{isFa ? 'دانلود مستقیم فایل install.sh' : 'Download install.sh'}</span>
               </button>
-            </div>
-          </div>
-        ) : activeTab === 'github' ? (
-          <div className="space-y-3">
-            <div className="relative group">
-              <pre
-                className="p-4 sm:p-5 bg-slate-950 rounded-xl border border-slate-800 text-cyan-300 font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed"
-                dir="ltr"
-              >
-{`# 1. Clone repository from GitHub
-git clone https://github.com/your-username/spectrewire.git
-cd spectrewire
-
-# 2. Make installer executable and run
-sudo chmod +x install.sh
-sudo ./install.sh`}
-              </pre>
-
-              <div className="absolute right-3 top-3 flex items-center gap-2">
-                <button
-                  onClick={handleCopyGithub}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all cursor-pointer ${
-                    copiedGithub
-                      ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
-                      : 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-500/20'
-                  }`}
-                >
-                  {copiedGithub ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{isFa ? 'کپی شد!' : 'Copied!'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>{isFa ? 'کپی دستورات' : 'Copy'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs text-slate-400 leading-relaxed">
-              {isFa
-                ? 'فایل‌های کامل پروژه از مخزن گیت‌هاب دریافت شده و فایل install.sh به طور خودکار وابستگی‌های npm را نصب، پروژه را بیلد و سرویس دائمی Systemd را روی سرور فعال می‌کند.'
-                : 'Clones full project files from GitHub, builds production bundle, configures systemd, and starts background daemon.'}
             </div>
           </div>
         ) : (

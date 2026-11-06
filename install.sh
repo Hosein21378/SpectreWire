@@ -79,15 +79,31 @@ echo -e "${GREEN}[+] Node.js ($($NODE_PATH -v)) آماده است.${NC}"
 echo -e "${YELLOW}[4/6] استقرار فایل‌های پروژه در ${INSTALL_DIR} ...${NC}"
 mkdir -p "$INSTALL_DIR"
 
-if [ -f "$SCRIPT_DIR/server.ts" ]; then
-    echo -e "${CYAN}[*] تشخیص منبع گیت‌هاب: کپی و ساخت بیلد پروژه...${NC}"
-    cp -r "$SCRIPT_DIR/"* "$INSTALL_DIR/"
+if [ -f "$SCRIPT_DIR/package.json" ]; then
+    echo -e "${CYAN}[*] تشخیص فایل‌های محلی مخزن گیت‌هاب: استقرار پروژه...${NC}"
+    if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
+        cp -a "$SCRIPT_DIR/." "$INSTALL_DIR/"
+    fi
     cd "$INSTALL_DIR"
-    npm install
+    echo -e "${CYAN}[*] نصب پکیج‌های وابستگی با npm...${NC}"
+    npm install --no-audit
+    echo -e "${CYAN}[*] کامپایل و ساخت بیلد نهایی پروژه...${NC}"
     npm run build
 else
-    echo -e "${CYAN}[*] دانلود بسته کامپایل‌شده از سرور اصلی...${NC}"
-    curl -fsSL "https://ais-dev-tsl33obpunrakfgltwleu4-31993181694.europe-west1.run.app/api/tunnel/release.tar.gz" | tar -xz -C "$INSTALL_DIR"
+    echo -e "${CYAN}[*] دانلود سورس پروژه از مخزن گیت‌هاب...${NC}"
+    DEFAULT_REPO="https://github.com/nhoseinm2/spectrewire.git"
+    read -t 15 -p "آدرس مخزن گیت‌هاب شما [$DEFAULT_REPO]: " INPUT_REPO || true
+    REPO_URL="${INPUT_REPO:-$DEFAULT_REPO}"
+    
+    rm -rf "$INSTALL_DIR"
+    if ! git clone "$REPO_URL" "$INSTALL_DIR"; then
+        echo -e "${RED}[!] خطا در دریافت مخزن گیت‌هاب. لطفاً ابتدا پروژه را کلون کنید:${NC}"
+        echo -e "${BOLD}git clone $REPO_URL && cd spectrewire && sudo ./install.sh${NC}"
+        exit 1
+    fi
+    cd "$INSTALL_DIR"
+    npm install --no-audit
+    npm run build
 fi
 
 cat << CONFIG_EOF > "$INSTALL_DIR/config.json"
@@ -101,6 +117,13 @@ cat << CONFIG_EOF > "$INSTALL_DIR/config.json"
 CONFIG_EOF
 
 echo -e "${YELLOW}[5/6] پیکربندی سرویس دائمی Systemd لینوکس...${NC}"
+
+# تشخیص مسیر فایل اجرایی سرور
+SERVER_FILE="$INSTALL_DIR/dist/server.js"
+if [ ! -f "$SERVER_FILE" ] && [ -f "$INSTALL_DIR/server.js" ]; then
+    SERVER_FILE="$INSTALL_DIR/server.js"
+fi
+
 cat << SYSTEMD_EOF > /etc/systemd/system/spectrewire.service
 [Unit]
 Description=SpectreWire Proprietary Tunnel Engine & Web Management Panel
@@ -113,7 +136,7 @@ User=root
 WorkingDirectory=$INSTALL_DIR
 Environment=NODE_ENV=production
 Environment=PORT=$SWP_PORT
-ExecStart=$NODE_PATH $INSTALL_DIR/dist/server.js
+ExecStart=$NODE_PATH $SERVER_FILE
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -121,11 +144,6 @@ LimitNOFILE=65535
 [Install]
 WantedBy=multi-user.target
 SYSTEMD_EOF
-
-# اگر فایل سرور در روت یا dist قرار دارد
-if [ ! -f "$INSTALL_DIR/dist/server.js" ] && [ -f "$INSTALL_DIR/server.js" ]; then
-    sed -i "s|$INSTALL_DIR/dist/server.js|$INSTALL_DIR/server.js|" /etc/systemd/system/spectrewire.service
-fi
 
 if command -v ufw >/dev/null 2>&1; then
     ufw allow $SWP_PORT/tcp >/dev/null 2>&1 || true

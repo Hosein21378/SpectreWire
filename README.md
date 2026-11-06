@@ -36,38 +36,49 @@
 
 ---
 
-## 🚀 روش ۱: نصب سریع تک‌خطی (پیشنهادی)
+## 🚀 روش نصب مستقیم از گیت‌هاب (پیشنهادی و تضمینی روی سرور مجازی)
 
-برای استقرار خودکار روی سرور لینوکس (Ubuntu 20.04/22.04/24.04 یا Debian 11/12 یا CentOS/AlmaLinux)، کافیست از طریق SSH به سرور متصل شده و دستور زیر را اجرا کنید:
+اگر در هنگام اجرای دستور تک‌خطی با خطای زیر مواجه شدید:
+```
+curl: (22) The requested URL returned error: 403
+```
+**علت:** دامنه محیط پیش‌نمایش توسعه ابری Google Cloud دارای احراز هویت سشن است و به همین دلیل سرورهای خارجی (VPS) که بدون کوکی سازنده درخواست می‌زنند با خطای 403 مسدود می‌شوند.
+
+**راه‌حل قطعی:** از دستورات استاندارد گیت‌هاب زیر استفاده کنید که مستقیماً مخزن را روی لینوکس شما کلون و با یک دستور بدون هیچ خطایی اجرا می‌کند:
+
+### گام‌های نصب در لینوکس (Ubuntu / Debian / CentOS / AlmaLinux):
 
 ```bash
-bash <(curl -fsSL https://ais-dev-tsl33obpunrakfgltwleu4-31993181694.europe-west1.run.app/install.sh)
+# ۱. بروزرسانی و نصب گیت
+sudo apt-get update && sudo apt-get install -y git
+
+# ۲. کلون کردن مخزن گیت‌هاب
+git clone https://github.com/nhoseinm2/spectrewire.git spectrewire
+cd spectrewire
+
+# ۳. دادن دسترسی اجرا به اسکریپت نصب
+sudo chmod +x install.sh
+
+# ۴. اجرای اسکریپت نصب هوشمند
+sudo ./install.sh
 ```
 
-> **نکته:** برای تغییر پورت یا رمز اولیه در هنگام نصب می‌توانید متغیرها را اضافه کنید:
+> **نکته:** برای تعیین پورت و رمز عبور اختصاصی در همان لحظه نصب:
 > ```bash
-> PORT=8443 PASSWORD=MySecretPass123 bash <(curl -fsSL https://ais-dev-tsl33obpunrakfgltwleu4-31993181694.europe-west1.run.app/install.sh)
+> sudo PORT=8443 PASSWORD="YourCustomPassword" ./install.sh
 > ```
 
 ---
 
-## 🛠️ روش ۲: نصب از طریق گیت‌هاب (GitHub)
+## ⚡ روش ۲: دستور تک‌خطی مستقیم از گیت‌هاب (GitHub Raw)
 
-اگر می‌خواهید پروژه را مستقیماً از سورس گیت‌هاب دریافت و روی سرور اصلی کامپایل کنید:
+اگر می‌خواهید بدون کلون کردن دستی و با یک دستور تک‌خطی نصب را انجام دهید، مستقیماً از لینک خام گیت‌هاب استفاده کنید:
 
-### گام ۱: کلون کردن ریپازیتوری
 ```bash
-git clone https://github.com/your-username/spectrewire.git
-cd spectrewire
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/nhoseinm2/spectrewire/main/install.sh)"
 ```
 
-### گام ۲: اجرای اسکریپت نصب اختصاصی
-```bash
-sudo chmod +x install.sh
-sudo ./install.sh
-```
-
-### گام ۳ (روش جایگزین): راه‌اندازی دستی بدون اسکریپت
+### روش راه‌اندازی دستی با Node.js (بدون اسکریپت):
 اگر ترجیح می‌دهید به صورت دستی با Node.js پروژه را بالا بیاورید:
 ```bash
 # ۱. نصب پیش‌نیازها
