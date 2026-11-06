@@ -1,0 +1,8 @@
+{
+  "name": "SpectreWire - Proprietary Tunnel & Traffic Control Panel",
+  "description": "سامانه مدیریت تونل با پروتکل اختصاصی SWP، مبهم‌سازی ضد DPI، مسیریابی و تست ترافیک زنده شبکه",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
